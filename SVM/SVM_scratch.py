@@ -105,22 +105,36 @@ def print_dual_boundary(model, x, y, resolution=100):
 """
 Overview: SVM Primal Solver Implementations
 
-1. Limitation: Linearity (Linear Boundary Only)
-   Primal solvers inherently produce a straight, linear hyperplane. 
-   They cannot capture non-linear patterns (such as concentric circles) unless explicit feature engineering is applied.
-   Even with Soft Margin, which allows for outliers, the decision boundary itself remains linear.
+    1. Limitation: Linearity (Strictly Linear Decision Boundary)
+    ------------------------------------------------------------
+    - Primal solvers inherently produce a straight, linear hyperplane.
+    - They cannot capture non-linear patterns (e.g., concentric circles) unless 
+      explicit feature engineering is applied to the input data.
+    - Even with a Soft Margin (allowing for outliers), the decision boundary 
+      itself remains strictly linear in the input space.
 
-2. Mechanism: Direct Optimization
-   These solvers compute the optimal weight vector (w) and bias term (b) directly in the primal feature space.
+    2. Mechanism: Direct Optimization in Primal Space
+    -------------------------------------------------
+    - These solvers explicitly compute the optimal weight vector (w) and 
+      bias term (b) directly in the primal feature space.
+    - The objective is to minimize the cost function (e.g., Hinge Loss + Regularization) 
+      with respect to 'w' and 'b'.
 
-3. Constraint: Incompatibility with Kernel Methods
-   Primal formulations assume we can explicitly calculate and store 'w'. 
-   However, in Kernel methods (e.g., RBF), the data is mapped to an infinite-dimensional space where 'w' cannot be explicitly computed. 
-   Thus, Primal Solvers cannot effectively utilize the "Kernel Trick."
+    3. Constraint: Incompatibility with Infinite-Dimensional Kernels
+    ----------------------------------------------------------------
+    - Primal formulations assume we can explicitly calculate and store 'w'.
+    - However, Kernel methods (e.g., RBF) map data to an infinite-dimensional space 
+      where 'w' is mathematically undefined or computationally impossible to represent.
+    - Therefore, Primal Solvers cannot effectively utilize the "Kernel Trick."
 
-4. Computational Complexity: Dimensionality Sensitivity
-   The computational cost scales with the feature dimension (d). 
-   This makes primal solvers computationally expensive for high-dimensional data (d >> n), whereas Dual solvers scale with the number of samples (n).
+    4. Computational Complexity: Sensitivity to Dimensionality (d)
+    --------------------------------------------------------------
+    - The computational cost scales primarily with the feature dimension (d).
+    - Efficiency Profile:
+        * Efficient for: Large number of samples (n), Small feature dimension (d).
+        * Expensive for: High-dimensional data (d >> n).
+    - Note: In contrast, Dual solvers scale with the number of samples (n), 
+      making them better suited for high-dimensional but sparse data.
 
 Available Implementations:
 1. Hard Margin QP Solver (solve_primal_qpsolver) - Uses `cvxopt` (Strict separation)
@@ -141,7 +155,7 @@ def solve_primal_qpsolver(x,y):
     #
     # 2. Classification Constraint: 
     #    For correct classification, all samples must lie on the correct side of the boundary:
-    #    y_i (w.x_i + b) >= 1 for all i.
+    #    y_i (w.x_i + b) >= 1 for all i. (remember y is label. it is either -1 or +1.)
     #
     # 3. Geometric Margin Derivation: 
     #    We aim to maximize the distance (margin) between the boundary and the nearest data points.
@@ -152,6 +166,7 @@ def solve_primal_qpsolver(x,y):
     #    1. Let P be an arbitrary sample point, and Q be its orthogonal projection onto the decision boundary.
     #    2. The vector connecting P and Q represents the shortest distance.
     #    3. The direction of this vector is given by the unit normal vector: w / ||w||.
+    #    (Since (P - Q) is perpendicular to the plane, it is parallel to the normal vector w. So, the unit direction is: w / ||w||.)
     #    4. The distance margin is the projection of vector (P-Q) onto the normal vector:
     #       Margin = | (P - Q) . (w / ||w||) | = | (P.w - Q.w) | / ||w||
     #    5. Since Q lies on the decision boundary, it satisfies w.Q + b = 0, which implies w.Q = -b.
@@ -173,7 +188,11 @@ def solve_primal_qpsolver(x,y):
     # ---------------------------------------------------------
     # Standard QP Form: Minimize (1/2 * u.T * P * u + q.T * u)
     # Goal: Minimize ||w||^2. We do not regularize (penalize) the bias term 'b'.
+    # the reason we do not penalize b is because it does not affect the margin directly.
+    # we only care about the direction and magnitude of w for margin maximization. because b is just a shift.
+    # but b is still important for classification, so we include it in the optimization variable.
 
+    # np.eye creates an identity matrix of size (n_features + 1)
     P_np = np.eye(n_features + 1)
     P_np[n_features, n_features] = 0.0 # Do not penalize bias 'b'
     P = matrix(P_np)
@@ -230,6 +249,8 @@ def solve_primal_soft_margin_qpsolver(x, y, C=1.0):
     # 1. Limitation of Hard Margin:
     #    The formulation requires linear separability. If the data has noise or overlap,
     #    the constraints become infeasible (no solution exists).
+    #    for exmaple, if there is an outlier that is on the wrong side of the boundary, (y_i(w.x_i + b) < 1)
+    #    it violates the constraint y_i(w.x_i + b) >= 1, making the problem unsolvable.
     #
     # 2. Introduction of Slack Variables (xi):
     #    We relax the strict constraints by introducing a non-negative slack variable 
@@ -245,20 +266,25 @@ def solve_primal_soft_margin_qpsolver(x, y, C=1.0):
     # Remark on QP Formulation:
     # Unlike Gradient Descent which handles the Hinge Loss implicitly (via max(0, ...)),
     # QP solvers require explicit variables to represent the piecewise linear loss function.
+    # QP solvers cannot recognize max(0, ...) directly, hence the need for slack variables.
 
     n_vars = n_features + 1 + n_samples # Total number of optimization variables
 
     # ---------------------------------------------------------
     # 1. Objective Function Construction (Matrix P, Vector q)
     # ---------------------------------------------------------
+    
     # Primal Objective: Minimize 1/2 * ||w||^2 + C * sum(xi_i)
     # - Term 1 (Regularization): Maximizes the margin (minimizes complexity).
     # - Term 2 (Loss): Penalizes margin violations.
+    #   - we should peralize the slack variables to avoid overfitting.
+    #   - if we do not penalize the slack variables, the model may choose to misclassify many points
+    #   - for example, if we are not penalizing the slack variables, the model may choose to misclassify all points by setting all xi_i to large values.
     # - Parameter C: Controls the trade-off. Large C -> Hard Margin behavior.
     
     # [Matrix P]: Quadratic Term
     # Applies only to weight vector 'w'. Bias 'b' and slacks 'xi' have 0 curvature penalty.
-
+    # Remember Standard QP Form: Minimize (1/2 * u.T * P * u + q.T * u)
 
     P_np = np.zeros((n_vars, n_vars))
     P_np[0:n_features, 0:n_features] = np.eye(n_features)
@@ -294,7 +320,7 @@ def solve_primal_soft_margin_qpsolver(x, y, C=1.0):
     # 2. Inequality Constraints Construction (Matrix G, Vector h)
     # ---------------------------------------------------------
     # We enforce two sets of constraints for every sample i:
-    #
+    # Standard QP Form: G * u <= h
     # 1. Margin Constraint with Slack: 
     #    y_i(w.x_i + b) >= 1 - xi_i
     #    Standard Form (<=): -y_i(w.x_i + b) - xi_i <= -1
@@ -343,8 +369,9 @@ def solve_primal_soft_margin_qpsolver(x, y, C=1.0):
     w = u_opt[:n_features]
     b = u_opt[n_features]
     
-    # (Optional) Extract slack variables for analysis
-    # xi = u_opt[n_features+1:]
+
+    #(Optional) Extract slack variables for analysis
+    xi = u_opt[n_features+1:]
     
     return w, b
 
@@ -360,11 +387,41 @@ def solve_primal_gradient(x, y, learning_rate=0.001, n_iters=1000, C=1.0):
     Instead of solving the Constrained QP problem directly, we convert it into 
     an unconstrained optimization problem by minimizing the Primal Objective Function:
     
-      J(w, b) = (1/2)||w||^2  +  C * \sum_{i=1}^{N} max(0, 1 - y_i(w \cdot x_i + b))
+      J(w, b) = (1/2)||w||^2  +  C * \sum_{i=1}^{N} max(0, 1 - y_i(w . x_i + b))
       
       - Term 1: L2 Regularization (Maximizes Margin / Prevents Overfitting).
       - Term 2: Hinge Loss (Penalizes Margin Violations).
     
+    (Slack and Hinge Loss is same?)
+    ---------------------------------------------------
+    - In the unconstrained formulation (e.g., used in Gradient Descent), 
+      we minimize the "Hinge Loss": 
+        Loss_i = max(0, 1 - y_i(w*x_i + b))
+    
+    - In the constrained QP formulation, we introduce a proxy variable 'xi_i' (slack).
+    - By enforcing the constraints:
+        (1) xi_i >= 0
+        (2) y_i(w*x_i + b) + xi_i >= 1  <=> xi_i >= 1 - y_i(w*x_i + b)
+      
+    - Minimizing 'xi_i' under these constraints mathematically forces:
+        xi_i = max(0, 1 - y_i(w*x_i + b))
+    
+    - Therefore, the variable 'xi' is exactly the Hinge Loss value for that sample.
+
+    2. Objective Function Construction (Why add them?)
+    --------------------------------------------------
+    - Machine Learning Objective = Regularization (Complexity) + Loss (Error)
+    
+    - Primal SVM Objective:
+        Minimize: 0.5 * ||w||^2   +   C * sum(xi_i)
+                  [Regularization]      [Total Error / Loss]
+    
+    - "sum(xi_i)" represents the total classification error (Total Hinge Loss).
+    - We minimize this sum to encourage the model to classify data correctly 
+      (reduce error) while the regularization term keeps the margin wide.
+
+
+      
     [Key Concept: Hinge Loss & Sub-gradients]
     The Hinge Loss function, L(z) = max(0, 1-z), is continuous but not differentiable 
     at z=1 (the 'kink'). Therefore, strictly speaking, we calculate the 'sub-gradient'.
@@ -372,6 +429,8 @@ def solve_primal_gradient(x, y, learning_rate=0.001, n_iters=1000, C=1.0):
     - If z < 1 (Violation): Gradient is -y * x
     - If z > 1 (Correct & Safe): Gradient is 0
     - If z = 1 (Exactly on Margin): We choose the gradient to be -y * x (or 0) by convention.
+
+
     """
 
 
@@ -396,7 +455,7 @@ def solve_primal_gradient(x, y, learning_rate=0.001, n_iters=1000, C=1.0):
         # Shortfall = 1 - y_i(w.x + b)
         shortfall = 1 - y * decision
 
-        # Identify the 'Active Set' (Samples contributing to the gradient)
+        # Identify the 'Active Set' (Samples contributing to the gradient:missclassified or within margin)
         # - Misclassified points (Shortfall > 1)
         # - Points inside the margin (0 < Shortfall < 1)
         # - Points exactly on the margin (Shortfall = 0, depending on implementation)
@@ -462,6 +521,8 @@ def solve_primal_newton_vectorized(x, y, n_iters=20, C=1.0):
     # 1. Variable & Data Setup for Vectorization
     # ---------------------------------------------------------
     # Combine parameters w and b into a single vector 'u' = [w_1, ..., w_d, b].
+    # because netwon's method update all larger number of variables at once, so we combine w and b into a single vector u.
+    # however sgd can update w and b separately. It does not calculate hessian matrix, but only gradient vector.
     u = np.zeros(n_features + 1)
     
     # Augment feature matrix X with a column of 1s to handle bias 'b'.
@@ -518,6 +579,9 @@ def solve_primal_newton_vectorized(x, y, n_iters=20, C=1.0):
         # Newton's Method uses this curvature to dynamically adjust the step size,
         # taking larger steps in flat regions and smaller steps in steep regions.
         
+        # SVM is convex function, so Hessian is always positive semi-definite.
+        # Therefore, we do not need to worry about negative curvature directions.
+
         # [Mathematical Derivation: From Gradient to Hessian]
         # We need to differentiate the Gradient vector w.r.t 'u' again.
         #
@@ -656,10 +720,11 @@ def rbf_kernel(x1, x2, gamma=0.5):
    -----------------------
    We incorporate the constraints into the objective function using Lagrange 
    Multipliers: alpha (for margin) and mu (for non-negativity).
+   * C is a static penalty parameter in the primal, not a variable.
 
    L(w, b, xi, alpha, mu) = 
        [ (1/2)||w||^2 + C * \sum(xi) ]                        <-- Primal Objective
-       - \sum( alpha_i * [ y_i(w \cdot x_i + b) - 1 + xi ] )  <-- Margin Penalty
+       - \sum( alpha_i * [ y_i(w \cdot x_i + b) - 1 + xi ] )  <-- Margin Penalty (y_i(w.x_i + b) >= 1 - xi --> y_1(w.x_i + b) - 1 + xi >= 0)
        - \sum( mu_i * xi )                                    <-- Slack Penalty
 
 3. STATIONARITY CONDITIONS (KKT Conditions)
@@ -670,12 +735,15 @@ def rbf_kernel(x1, x2, gamma=0.5):
    A) dL / dw = 0  =>  w = \sum( alpha_i * y_i * x_i )
       [KEY INSIGHT 1]: The optimal weight vector 'w' is a linear combination of the Support Vectors.
 
+
    B) dL / db = 0  =>  \sum( alpha_i * y_i ) = 0
       [KEY INSIGHT 2]: The weighted sum of positive and negative labels must balance to zero.
+      This is the Equality Constraint in the Dual formulation.
 
    C) dL / dxi = 0 =>  C - alpha_i - mu_i = 0
       [KEY INSIGHT 3]: alpha_i = C - mu_i. 
       Since mu_i >= 0, this yields the **Box Constraint**: 0 <= alpha_i <= C.
+      This is the inequality constraint in the Dual formulation.
 
 4. DUAL PROBLEM FORMULATION (Substitution)
    ---------------------------------------
