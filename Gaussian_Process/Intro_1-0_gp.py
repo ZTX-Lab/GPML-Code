@@ -245,7 +245,7 @@ plt.ylim(-3, 3)
 # Plotting Posterior
 plt.subplot(1, 2, 2)
 # 1. The "Tube" of Uncertainty
-uncertainty = 1.96 * np.sqrt(np.diag(Cov_posterior))
+uncertainty = 1.96 * np.sqrt(np.diag(Cov_posterior)) # from gausian distribution,  1 : 68%, 1.96 : 95%, 2.58 : 99%
 plt.fill_between(X_test.flatten(), 
                  mu_posterior - uncertainty, 
                  mu_posterior + uncertainty, 
