@@ -160,6 +160,10 @@ K_ss = kernel(X_test, X_test)     # Test vs Test: The prior uncertainty.
 # Inverse of K (with small jitter for numerical stability)
 # We need K^-1 to "normalize" the information from training data.
 # Added 1e-8 (Jitter) to diagonal to prevent dividing by zero (Singular Matrix).
+# if we are not use de-correlation, the model may be unstable.
+# e.g., two training points are extremely close to each other. and then K becomes singular.?
+
+
 K_inv = np.linalg.inv(K + 1e-8 * np.eye(len(X_train)))
 
 # --- STEP A: Calculate the New Mean (Prediction) ---
@@ -186,6 +190,13 @@ mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1)
 # --- STEP B: Calculate the New Covariance (Uncertainty) ---
 # Formula (Math): Sigma_* = K_** - K_*^T * K^-1 * K_*
 # Formula (Code): Cov     = K_ss - K_s.T * K_inv * K_s
+# [Q: why we subtract this term from K_ss?]
+# k_ss represents our initial uncertainty about the test points (Prior).
+# we dont have y, the values at test points. however we can get correlation between test points and train points (K_s).
+# K_s, k_ss represent correlation between points, not the actual values.
+# we can get value using correlation and known values at train points (y_train).
+
+
 #
 # [Deep Dive into the Formula]
 # Intuition: "Posterior Uncertainty = Prior Uncertainty - Information Gained"
@@ -208,7 +219,10 @@ mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1)
 #    Variance is a "Squared" quantity (Sigma^2).
 #    K_s is just correlation (Linear).
 #    To subtract from Variance, we effectively need "Correlation Squared" (K_s * K_s).
-
+#
+# 3. multivariate Gaussian distribution property: (schur complement)
+# This is a standard result from the theory of multivariate Gaussian distributions.
+# It ensures that the resulting covariance matrix is valid (positive semi-definite).
 
 Cov_posterior = K_ss - K_s.T.dot(K_inv).dot(K_s)
 
