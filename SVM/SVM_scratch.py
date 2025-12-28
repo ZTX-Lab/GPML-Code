@@ -699,11 +699,109 @@ def rbf_kernel(x1, x2, gamma=0.5):
     # Computed simply as scalar for single point, or vector for matrices.
     return np.exp(-gamma * np.linalg.norm(x1 - x2)**2)
 
-
-
 """
+==============================================================================
+SVM MATHEMATICAL DERIVATION & DUALITY THEORY
+==============================================================================
+
+1. Duality Theory: The Perspective Shift
+------------------------------------------------------------------------------
+    A. Definition
+       - Primal Problem: Minimizing the cost from the user's perspective.
+       - Dual Problem: Maximizing the penalty (lower bound) from the regulator's perspective.
+       
+    B. Weak vs. Strong Duality
+       - Weak Duality: The Dual solution (d*) is always <= Primal solution (p*).
+         (d* acts as a lower bound for p*).
+       - Strong Duality: Under certain conditions (Convexity, Slater's Condition),
+         the duality gap closes, and d* = p*.
+       - SVM Context: The SVM objective is Quadratic (Convex) and constraints are linear.
+         Therefore, Strong Duality holds. Solving the Dual gives the EXACT solution to the Primal.
+
+    C. Why switch to Dual in SVM?
+       1. Dimension Independence: Primal depends on feature dimension 'D'. Dual depends on sample count 'N'.
+       2. The Kernel Trick: Dual formulation reveals dot products <x_i, x_j>, 
+          allowing us to replace them with k(x_i, x_j) for infinite-dimensional mapping.
+
+------------------------------------------------------------------------------
+2. Step-by-Step Derivation: From Primal to Dual
+------------------------------------------------------------------------------
+
+    [Step 1] The Primal Objective
+    We want to maximize the margin (minimize ||w||) subject to correct classification.
+    
+      Minimize: J(w) = (1/2) * ||w||^2
+      Subject to: y_i * (w.T * x_i + b) - 1 >= 0   (for all i)
+
+    [Step 2] The Lagrangian
+    We incorporate constraints into the objective using Lagrange multipliers (alpha_i >= 0).
+    
+      L(w, b, alpha) = (1/2)||w||^2 - sum( alpha_i * [y_i * (w.T * x_i + b) - 1] )
+
+    [Step 3] Minimizing L w.r.t Primal Variables (w, b)
+    To find the lower bound, we differentiate L and set derivatives to 0.
+
+      A. Differentiate w.r.t 'w':
+         dL/dw = w - sum(alpha_i * y_i * x_i) = 0
+         => w = sum(alpha_i * y_i * x_i)
+         (* Insight: The weight vector w is a linear combination of Support Vectors *)
+
+      B. Differentiate w.r.t 'b':
+         dL/db = - sum(alpha_i * y_i) = 0
+         => sum(alpha_i * y_i) = 0
+         (* Insight: This becomes a crucial equality constraint in the Dual problem *)
+
+    [Step 4] Substituting Back (The Magic)
+    Plug the results from Step 3 back into the Lagrangian equation.
+
+      Term 1: (1/2)||w||^2
+         = (1/2) * < sum(alpha_i y_i x_i), sum(alpha_j y_j x_j) >
+         = (1/2) * sum_i sum_j [ alpha_i alpha_j y_i y_j <x_i, x_j> ]
+
+      Term 2: - sum( alpha_i * y_i * (w.T * x_i + b) )
+         = - sum_i alpha_i y_i ( (sum_j alpha_j y_j x_j).T x_i )  -  b * sum(alpha_i y_i)
+         = - sum_i sum_j [ alpha_i alpha_j y_i y_j <x_i, x_j> ]   -  0  (since sum(alpha*y)=0)
+      
+      Term 3: + sum(alpha_i)
+         (Derived from expanding the - sum(alpha * -1) part)
+
+      Combine Terms:
+         L_dual = Term 3 + Term 1 + Term 2
+                = sum(alpha_i) + (1/2)SumSum[...] - SumSum[...]
+                = sum(alpha_i) - (1/2) sum_i sum_j [ alpha_i alpha_j y_i y_j <x_i, x_j> ]
+
+------------------------------------------------------------------------------
+3. Transformation for QP Solver (Standard Form)
+------------------------------------------------------------------------------
+
+    [The Dual Objective]
+      Maximize: W(alpha) = sum(alpha) - (1/2) sum_i sum_j alpha_i alpha_j y_i y_j K(x_i, x_j)
+
+    [Standard QP Form]
+      Minimize: (1/2) x.T P x + q.T x
+
+    [Transformation Steps]
+    1. Flip Maximize to Minimize: Multiply the whole equation by -1.
+       New Obj: (1/2) sum sum ... - sum(alpha)
+
+    2. Match Quadratic Term (Matrix P):
+       (1/2) alpha.T * P * alpha  <==>  (1/2) sum sum alpha_i alpha_j (y_i y_j K_ij)
+       => P_ij = y_i * y_j * K(x_i, x_j)
+       (Code: P = outer(y, y) * K)
+
+    3. Match Linear Term (Vector q):
+       q.T * alpha  <==>  - sum(alpha)
+       => q = [-1, -1, ..., -1].T
+       (Code: q = -1 * ones(N))
+
+    4. Constraints:
+       sum(alpha_i * y_i) = 0  =>  A * x = b  (where A=y, b=0)
+       0 <= alpha_i <= C       =>  G * x <= h (Stacked constraints for lower/upper bounds)
+
+==============================================================================
+
 ===============================================================================
-   DUAL SOFT MARGIN SVM: MATHEMATICAL DERIVATION & ALGORITHM
+   DUAL SOFT MARGIN SVM: MATHEMATICAL DERIVATION & ALGORITHM2
 ===============================================================================
 
 1. PRIMAL PROBLEM FORMULATION (The Starting Point)
