@@ -185,7 +185,7 @@ K_inv = np.linalg.inv(K + 1e-8 * np.eye(len(X_train)))
 #
 # 3. .reshape(-1): Flattens the result from (50, 1) to (50,) for easier plotting.
 
-mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1)
+mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1) #This is likelihood.
 
 # --- STEP B: Calculate the New Covariance (Uncertainty) ---
 # Formula (Math): Sigma_* = K_** - K_*^T * K^-1 * K_*
