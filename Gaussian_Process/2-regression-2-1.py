@@ -161,18 +161,7 @@ A: If we assume a linear model f(x) = x^T w, then the randomness of f
   k(x, x') = E[ (x^T w)(x'^T w) ] = x^T * E[ww^T] * x' = x^T * Sigma_p * x'
 ------------------------------------------------------------------------------
 
-Tommorows will handle belows:
-- the Posterior derivation and visualization.
-- Projections of Inputs into Feature Space
-- Function-space View
 
-1.1 will handle belows:
-- Varying the Hyperparameters
-- Decision Theory for Regression
-- An Example Application
-- Smoothing, Weight Functions and Equiva￾lent Kernels
-- Incorporating Explicit Basis Functions
-- History and Related Work
 ================================================================================
 """
 
