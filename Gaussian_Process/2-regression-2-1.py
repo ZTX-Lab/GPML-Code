@@ -59,6 +59,10 @@ with mean X^T w and covariance sigma_n^2 I
 --------------------------------------------------------------------------------
 1. The Likelihood (우도): p(y|X, w)
 --------------------------------------------------------------------------------
+
+p(y|X, w) = Π [ Gaussian(y_i | mean=x_i^T w, var=σ_n^2) ]
+          = N(X^T w, σ_n^2 I) = (1 / √(2πσ_n^2)) * exp( - |y - X^T w|^2 / (2σ_n^2) )
+
 Q: Why does the formula look like a product (Π)?
 A: Because of the "i.i.d assumption" (Independent Identically Distributed).
    The probability of seeing all n data points is the product of seeing each one.
@@ -86,6 +90,11 @@ A: Because of the "i.i.d assumption" (Independent Identically Distributed).
 --------------------------------------------------------------------------------
 2. The Prior (사전 분포): p(w)
 --------------------------------------------------------------------------------
+
+Rememver, we are not looking for a single best w, but a distribution over possible w.
+Then how do we define our initial belief about w?
+We know nothing about w, so we use a Gaussian prior with zero mean and covariance Σ_p.
+
 Q: What does w ~ N(0, Σ_p) mean? (Eq 2.4)
 A: It represents our belief about the weights BEFORE seeing any data.
 
@@ -102,28 +111,55 @@ A: It represents our belief about the weights BEFORE seeing any data.
        -> This acts exactly like "L2 Regularization (Ridge Regression)"!
        -> It prevents Overfitting by penalizing large weights.
 
-           
-[Concept Check: Addressing Common Confusions (Weight-space vs. Function-space)]
-     ------------------------------------------------------------------------------
-      Q1. Is "w ~ N(0, Σ_p)" an absolute TRUTH?
-      A: NO, it is a mathematical ASSUMPTION (Prior).
-         - We assume Gaussian because it's the most honest distribution (Max Entropy)
-           and makes calculation possible (Conjugacy) without numerical approximation.
-         - We "pre-specify" Sigma_p to define the model's flexibility.
-         - i.e., small Sigma_p = Strong Regularization = Simple Model
-         - large Sigma_p = Weak Regularization = Complex Model
-         - also, actually even when we use kernels like RBF, we are implicitly defining covariance
-         - i.e., length-scale in RBF kernel indirectly controls the prior over functions
-     
-      Q2. Why talk about 'w' now? We used to calculate Kernel (K) directly!
-      A: You are looking at the "Ingredients" (w) after tasting the "Meal" (K).
-         - Weight-space View: Explains the ORIGIN. 
-           The uncertainty in weights (Sigma_p) CREATES the covariance in functions (K).
-           [Formula Link]: K(x, x') = x^T * Sigma_p * x'
-         - Function-space View (GP): Since 'w' can be infinite-dimensional (like in RBF),
-           we skip 'w' and compute 'K' directly for efficiency.
+Q. is it okay to assume a Gaussian prior for w?
+A. Yes, because of Mathematical Convenience (Conjugacy).
+    - Gaussian Prior + Gaussian Likelihood => Gaussian Posterior
 
---------------------------------------------------------------------------------
+Q. but convienience is not a good reason. what if the true weight is not in covariance area?
+A. True, but we often don't know the true weights anyway.
+    - The Gaussian prior is the "most honest" assumption (Maximum Entropy) 
+      given only mean and covariance information.
+    - It allows us to perform exact Bayesian inference without numerical approximations.
+
+Q. but the problem is "WE" define the covariance matrix Σ_p. what if we define it wrong?
+A. Good point. The choice of Σ_p reflects our assumptions about the function complexity.
+    - If we choose a very small Σ_p, we are assuming a simple model (strong regularization).
+    - If we choose a large Σ_p, we allow more complex models (weak regularization).
+    - In practice, we can tune Σ_p based on validation data or use hierarchical Bayesian methods.
+
+Q. thus is there any problem if we use wrong covariance matrix?
+A. Yes, if Σ_p is too small, we may underfit the data (too rigid).
+    - If Σ_p is too large, we may overfit the data (too flexible).
+
+
+           
+------------------------------------------------------------------------------
+[Concept Check: Addressing Common Confusions (Weight-space vs. Function-space)]
+------------------------------------------------------------------------------
+Q1. Is "w ~ N(0, Sigma_p)" an absolute TRUTH?
+A: NO, it is a mathematical ASSUMPTION (Prior).
+  - We "pre-specify" Sigma_p (hyperparameter) to control model flexibility.
+  - Small Sigma_p = Rigid model / Large Sigma_p = Flexible model.
+
+Q2. Why is Covariance written as K(x, x')? Shouldn't it be about y (or f)?
+A: It IS about f, but parameterised by x.
+  1. Definition of GP:
+      A GP is a collection of random variables f(x).
+      For any specific input x, f(x) is a random variable.
+
+  2. Definition of Covariance Function:
+      We calculate the covariance between two random variables f(x) and f(x').
+      Cov(f(x), f(x')) = E[ (f(x) - m(x)) * (f(x') - m(x')) ]
+
+  3. Notation:
+      Since the value of this covariance depends entirely on the locations 
+      x and x', we denote this function as k(x, x').
+
+Q3. How does this connect to 'w' (Weight-space view)?
+A: If we assume a linear model f(x) = x^T w, then the randomness of f
+  comes solely from w. Thus:
+  k(x, x') = E[ (x^T w)(x'^T w) ] = x^T * E[ww^T] * x' = x^T * Sigma_p * x'
+------------------------------------------------------------------------------
 
 Tommorows will handle belows:
 - the Posterior derivation and visualization.

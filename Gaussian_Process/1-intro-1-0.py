@@ -7,23 +7,47 @@ PART 1: THEORETICAL FOUNDATIONS (Definitions & Philosophy)
 This section synthesizes the insights from our discussions regarding Covariance, 
 Kernels, and the duality between Statistics and Function Spaces.
 
+
+------------------------------------------------------------------------------
+0. Fundamental, Unchanging Definition of Covariance
+------------------------------------------------------------------------------
+
+For any objects (random variables, function values, processes),
+covariance is ALWAYS defined via expectation:
+
+   Cov(A, B) = E[(A - μ_A)(B - μ_B)]
+
+This definition is universal and never changes.
+Then why we use upper equation in statiscis but use different equation in GP?
+------------------------------------------------------------------------------
+
+
 ------------------------------------------------------------------------------
 1. The Dual Nature of Covariance: "Observation" vs. "Definition"
 ------------------------------------------------------------------------------
     A. Classical Statistics (Sample Covariance) -> "Bottom-Up / Inductive"
-       - Context: Tabular data (Features X, Y).
-       - Definition: A calculated measure of linearity based on observed samples.
+       - Random variables X, Y already "exist"
+       - Their joint distribution is given or estimated from data
        - Formula: Cov(X, Y) = E[(X - mu_x)(Y - mu_y)]
        - Philosophy: "We observe the data first, then estimate the relationship."
        - Limit: Standard statistical covariance implicitly assumes a 'Linear Kernel'.
                 It checks "Do these points form a line?"
 
     B. Gaussian Processes (Kernel Covariance) -> "Top-Down / Deductive"
-       - Context: Function space (f(x) at infinite points).
+       - Covariance euqation is not changed.
+       - but we don't have defined f(x) yet.
+       - Covariance is integral and we cannot compute it directly.
+       - Thus we suppose what Cov(f(x), f(x')) SHOULD BE.
+       - We can put any kernel function K(x, x') as the covariance.
+       - but usually we use rbf kernel, because it can represent wide range of functions.
+       - also it is mathematically convenient for higher dimensions.
+
        - Definition: A "Rule" or "Law" we impose on the world (The Model Assumption).
        - Philosophy: "We define the relationship rule (Kernel) first, then data is generated."
        - The Kernel Function k(x, x') IS the Covariance.
          - It dictates the "Physics" of the function space before any data is seen.
+
+
 
 ------------------------------------------------------------------------------
 2. The Deep Meaning of Covariance in GP (Physical & Informational)
