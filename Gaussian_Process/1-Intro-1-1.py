@@ -163,6 +163,84 @@ K_ss = kernel(X_test, X_test)     # Test vs Test: The prior uncertainty.
 # if we are not use de-correlation, the model may be unstable.
 # e.g., two training points are extremely close to each other. and then K becomes singular.?
 
+################################################################################
+# GAUSSIAN PROCESS: MATHEMATICAL INTUITION & MATRIX DERIVATION
+# Summary of Covariance Matrices, Posterior Variance, and Cancellation Logic.
+################################################################################
+
+# ==============================================================================
+# 1. K_ss (The Prior / Self-Covariance Matrix)
+# ==============================================================================
+# The K_ss matrix contains two distinct layers of information:
+#
+# A. Diagonal Elements (Self-Covariance): K(x_i, x_i)
+#    - Represents "Uncertainty" or "Total Energy" (Variance).
+#    - Concept: "How high can the function jump?" (Amplitude).
+#
+# B. Off-Diagonal Elements (Cross-Covariance): K(x_i, x_j)
+#    - Represents "Smoothness" or "Relationship".
+#    - Concept: "If point A moves, does point B follow?" (Correlation).
+
+# ==============================================================================
+# 2. K_s (The Cross-Covariance Matrix: Train vs. Test)
+# ==============================================================================
+# K_s acts as the "Control Wires" connecting known data (Train) to unknown (Test).
+#
+# Interpretation of Column Vectors:
+# - High Value: "Selection" (Copying the nearest training point).
+# - Distributed: "Mixing" (Interpolating between neighbors).
+# - Zero Value: "Isolation" (Reverting to the mean with max uncertainty).
+
+# ==============================================================================
+# 3. Posterior Variance Formula: K_ss - (K_s^T * K_inv * K_s)
+# ==============================================================================
+# Logic: [Total Uncertainty] - [Information Gained from Data]
+#
+# A. K_inv (The De-duplicator):
+#    - Removes redundant information shared among training points.
+#
+# B. The Sandwich Term (K_s^T * K_inv * K_s):
+#    - Represents a "Round Trip" of information:
+#      Test -> Train (K_s) -> Filter (K_inv) -> Test (K_s^T).
+#    - This term calculates the "Explained Variance".
+
+# ==============================================================================
+# 4. MATHEMATICAL DERIVATION: Matrix Cancellation & Correlation Expansion
+# ==============================================================================
+# Proof that scale factors (amplitudes) naturally cancel out and dimensions match.
+#
+# Definition:
+# Let K be decomposed into Amplitude (D) and Correlation (R).
+# K = D * R * D
+#   - D: Diagonal matrix of standard deviations (Sigma).
+#   - R: Correlation matrix (values between -1 and 1).
+#
+# Step 1: Decomposition of Terms
+#   - K_train = D_train * R_train * D_train
+#   - K_s     = D_train * R_cross * D_test
+#
+# Step 2: Expansion of the Term (K_s^T * K_inv * K_s)
+#   - K_s^T = D_test * R_cross^T * D_train
+#   - K_inv = (D_train * R_train * D_train)^-1
+#           = D_train^-1 * R_train^-1 * D_train^-1  (Reverse order)
+#
+# Step 3: The "Collision" and Cancellation
+#   Substitute terms into the sequence:
+#   = [D_test R_cross^T (D_train)] * [(D_train^-1) R_train^-1 (D_train^-1)] * [(D_train) R_cross D_test]
+#
+#   Notice the neighbors:
+#   (D_train * D_train^-1) becomes Identity (I).
+#   (D_train^-1 * D_train) becomes Identity (I).
+#   * The Training Amplitudes (D_train) are completely annihilated.
+#
+# Step 4: Final Result (The Residue)
+#   = D_test * [ R_cross^T * R_train^-1 * R_cross ] * D_test
+#
+#   - Middle Term: Pure Correlation Ratio (Unitless, Normalized).
+#   - Outer Terms: D_test (Test Amplitude).
+
+
+
 
 K_inv = np.linalg.inv(K + 1e-8 * np.eye(len(X_train)))
 
@@ -185,7 +263,7 @@ K_inv = np.linalg.inv(K + 1e-8 * np.eye(len(X_train)))
 #
 # 3. .reshape(-1): Flattens the result from (50, 1) to (50,) for easier plotting.
 
-mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1) #This is likelihood.
+mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1) 
 
 # --- STEP B: Calculate the New Covariance (Uncertainty) ---
 # Formula (Math): Sigma_* = K_** - K_*^T * K^-1 * K_*
@@ -226,6 +304,7 @@ mu_posterior = K_s.T.dot(K_inv).dot(y_train).reshape(-1) #This is likelihood.
 
 Cov_posterior = K_ss - K_s.T.dot(K_inv).dot(K_s)
 
+tttt= K_s.T.dot(K_inv).dot(K_s)
 # Sampling again from the Posterior distribution.
 # 3 random functions that fit the observed data.
 # They should pass near the red points (X_train, y_train).
@@ -242,7 +321,7 @@ Cov_posterior = K_ss - K_s.T.dot(K_inv).dot(K_s)
 #   This creates the "Tying the knot" effect
 
 
-samples_posterior = np.random.multivariate_normal(mu_posterior, Cov_posterior, 3)
+samples_posterior = np.random.multivariate_normal(mu_posterior, Cov_posterior, 10)
 
 # ==========================================
 # PART 6: Visualization
@@ -269,7 +348,7 @@ plt.fill_between(X_test.flatten(),
 plt.plot(X_test, mu_posterior, 'b-', lw=2, label='Mean Prediction')
 
 # 3. The Sampled Functions
-for i in range(3):
+for i in range(10):
     plt.plot(X_test, samples_posterior[i], linestyle='-', alpha=0.5)
 
 # 4. The Real Data
